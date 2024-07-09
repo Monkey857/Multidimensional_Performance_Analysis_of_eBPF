@@ -21,22 +21,36 @@
 #include "common.h"
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, 1024*1024);
-    __type(key, U32);
+    __uint(max_entries, 10*1024*1024);//120MB
+    __type(key, u32);
     __type(value,u64);
 } hash_map SEC(".maps");
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
-    __uint(max_entries, 1024*1024);
+    __uint(max_entries, 10*1024*1024);
     __type(key, u32);
     __type(value,u64);
 } array_map SEC(".maps");
-//在内核态中进行数据的增删改查，并将数据信息存入到相应的map中
+//在内核态中将数据信息存入到相应的map中
+volatile __u64 k = 0;
+#define MAX_ENTRIES 10*1024*1024
 static int hash_vs_array(struct trace_event_raw_sys_enter *args){
+    u32 idx;
     u64 syscall_id = (u64)args->id;
-    u32 time = bpf_ktime_get_ns();
-    //向hash、array类型的map中存入数据
-    bpf_map_update_elem(&hash_map,&time,&syscall_id,BPF_ANY);
-    bpf_map_update_elem(&array_map,&time,&syscall_id,BPF_ANY);
+
+    // 使用原子操作递增k，并获取递增前的值
+    idx = __sync_fetch_and_add(&k, 1);
+
+    // 确保k在0到10*1024*1024之间循环(避免同步问题)
+    if (idx >= MAX_ENTRIES) {
+        __sync_bool_compare_and_swap(&k, idx + 1, 0);
+        idx = 0;
+    }
+
+    // 向hash、array类型的map中存入数据
+    bpf_map_update_elem(&hash_map, &idx, &syscall_id, BPF_ANY);
+    bpf_map_update_elem(&array_map, &idx, &syscall_id, BPF_ANY);
+
+    return 0;
 }
 #endif /* __ANALYZE_MAP_H */

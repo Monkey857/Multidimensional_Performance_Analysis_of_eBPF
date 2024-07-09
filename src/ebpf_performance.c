@@ -107,9 +107,8 @@ static int print_event_head(struct env *env) {
     }
     switch (env->event_type) {
         case HASH_VS_ARRAY:
-            printf("%-18s %-20s %-15s %-15s %-10s %-10s %-10s\n", "TIME(ms)",
-                   "DUR_HALT(ms)", "COMM", "PID/TID", "VCPU_ID", "WAIT/POLL",
-                   "VAILD?");
+            printf("%-12s %-12s %-12s %-12s %-12s %-12s \n", "hash_ins",
+                   "hash_look", "hash_del", "arr_ins", "arr_look", "arr_clear");
             break;
         default:
             // Handle default case or display an error message
@@ -122,49 +121,10 @@ static void set_disable_load(struct ebpf_performance_bpf *skel) {
     bpf_program__set_autoload(skel->progs.tp_sys_entry,
                               env.execute_hash_vs_array ? true : false);
 }
-
-// 函数不接受参数，返回一个静态分配的字符串
-const char *getCurrentTimeFormatted() {
-    static char ts[32];  // 静态分配，每次调用都会覆盖
-    time_t t;
-    struct tm *tm;
-
-    time(&t);
-    tm = localtime(&t);
-
-    // 格式化时间到静态分配的字符串中
-    strftime(ts, sizeof(ts), "%Y/%m/%d %H:%M:%S", tm);
-
-    return ts;  // 返回指向静态字符串的指针
-}
-
-
-// clear the specific map
-int clear_map(void *lookup_key, void *next_key, enum EventType type, int fd) {
-    int err;
-    switch (type) {
-        case HASH_VS_ARRAY:
-            memset(lookup_key, 0, sizeof(__u64));
-            break;
-        default:
-            return -1;
-    }
-    while (!bpf_map_get_next_key(fd, lookup_key, next_key)) {
-        err = bpf_map_delete_elem(fd, next_key);
-        if (err < 0) {
-            fprintf(stderr, "failed to cleanup map: %d\n", err);
-            return -1;
-        }
-        lookup_key = next_key;
-    }
-    return 1;
-}
-
-
 void print_map_and_check_error(int (*print_func)(struct ebpf_performance_bpf *),
                                struct ebpf_performance_bpf *skel,
                                const char *map_name, int err) {
-    OUTPUT_INTERVAL(2);
+    OUTPUT_INTERVAL(3);
     print_func(skel);
     if (err < 0 && err != -4) {
         printf("Error printing %s map: %d\n", map_name, err);
@@ -174,7 +134,6 @@ void print_map_and_check_error(int (*print_func)(struct ebpf_performance_bpf *),
 int attach_probe(struct ebpf_performance_bpf *skel) {
     return ebpf_performance_bpf__attach(skel);
 }
-#define NUM_ENTRIES 1024
 struct timespec diff(struct timespec start, struct timespec end) {
     struct timespec temp;
     if ((end.tv_nsec - start.tv_nsec) < 0) {
@@ -186,97 +145,111 @@ struct timespec diff(struct timespec start, struct timespec end) {
     }
     return temp;
 }
-
-int compare_hash_array(struct ebpf_performance_bpf *skel){
-    printf("I am come in!!\n");
+#define MAX_ENTRIES 10*1024*1024
+int compare_hash_array(struct ebpf_performance_bpf *skel) {
     int hash_fd = bpf_map__fd(skel->maps.hash_map);
     int array_fd = bpf_map__fd(skel->maps.array_map);
     if (hash_fd < 0 || array_fd < 0) {
         fprintf(stderr, "Failed to get map file descriptors: %d, %d\n", hash_fd, array_fd);
         return 1;
     }
+
     struct timespec start, end, elapsed;
     int key, value;
-    __u32 lookup_key;
-    __u64 next_key;
-    int times = 4;
-    // Test lookup for HashMap
+    __u32 lookup_key = 0;
+    __u32 next_key;
+    int times = 0;
+
+    // 操作 HashMap
+    // 插入元素
     clock_gettime(CLOCK_MONOTONIC, &start);
-    while (!bpf_map_get_next_key(hash_fd, &lookup_key, &next_key)){
-        times++;
-        if (bpf_map_lookup_elem(hash_fd, &next_key, &value) != 0) {
-            fprintf(stderr, "Failed to lookup hash_map: %d\n", errno);
+    for (key = 0; key < MAX_ENTRIES; key++) {
+        value = key * 2; // 假设值为key的两倍
+        if (bpf_map_update_elem(hash_fd, &key, &value, BPF_ANY) != 0) {
+            fprintf(stderr, "Failed to insert element into hash_map: %d\n", errno);
             return 1;
         }
-        lookup_key = next_key;
     }
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed = diff(start, end);
+    printf("%ld.%09ld  ", elapsed.tv_sec, elapsed.tv_nsec);
+    char formatted_time[20]; 
     
-    clock_gettime(CLOCK_MONOTONIC, &end);
-    elapsed = diff(start, end);
-    printf("HashMap lookup time: %ld.%09ld seconds\n", elapsed.tv_sec, elapsed.tv_nsec);
-    printf("查找了%d次\n",times);
-    // Test lookup for ArrayMap
-    times = 0;
+    // 查找元素
     clock_gettime(CLOCK_MONOTONIC, &start);
-    while (!bpf_map_get_next_key(array_fd, &lookup_key, &next_key)){
-        times++;
-        if (bpf_map_lookup_elem(array_fd, &next_key, &value) != 0) {
-            fprintf(stderr, "Failed to lookup hash_map: %d\n", errno);
+    for (key = 0; key < MAX_ENTRIES; key++) {
+        if (bpf_map_lookup_elem(hash_fd, &key, &value) != 0) {
+            fprintf(stderr, "Failed to lookup element in hash_map: %d\n", errno);
             return 1;
         }
-        lookup_key = next_key;
     }
     clock_gettime(CLOCK_MONOTONIC, &end);
     elapsed = diff(start, end);
-    printf("ArrayMap lookup time: %ld.%09ld seconds\n", elapsed.tv_sec, elapsed.tv_nsec);
-    printf("查找了%d次\n",times);
-    times = 0;
-    // // Test insertion for HashMap
-    // clock_gettime(CLOCK_MONOTONIC, &start);
-    // for (int i = 0; i < NUM_ENTRIES; i++) {
-    //     key = i;
-    //     value = i;
-    //     if (bpf_map_update_elem(hash_fd, &key, &value, BPF_ANY) != 0) {
-    //         fprintf(stderr, "Failed to update hash_map: %d\n", errno);
-    //         return 1;
-    //     }
-    // }
-    // clock_gettime(CLOCK_MONOTONIC, &end);
-    // elapsed = diff(start, end);
-    // printf("HashMap insert time: %ld.%09ld seconds\n", elapsed.tv_sec, elapsed.tv_nsec);
+    snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
+    printf("%-13s", formatted_time);
 
-    // // Test insertion for ArrayMap
-    // clock_gettime(CLOCK_MONOTONIC, &start);
-    // for (int i = 0; i < NUM_ENTRIES; i++) {
-    //     key = i;
-    //     value = i;
-    //     if (bpf_map_update_elem(array_fd, &key, &value, BPF_ANY) != 0) {
-    //         fprintf(stderr, "Failed to update array_map: %d\n", errno);
-    //         return 1;
-    //     }
-    // }
-    // clock_gettime(CLOCK_MONOTONIC, &end);
-    // elapsed = diff(start, end);
-    // printf("ArrayMap insert time: %ld.%09ld seconds\n", elapsed.tv_sec, elapsed.tv_nsec);
+    // 清除 HashMap
+    lookup_key = 0;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    for(int key = 0;key < MAX_ENTRIES;key++){
+        if(bpf_map_delete_elem(hash_fd,&key)!=0){
+            fprintf(stderr, "Failed to delete element in hash_map: %d\n", errno);
+            return 1;
+        }
+    }
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed = diff(start, end);
+    snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
+    printf("%-13s", formatted_time);
+    // 操作 ArrayMap
+    // 插入元素
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    for (key = 0; key < MAX_ENTRIES; key++) {
+        value = key * 2; // 假设值为key的两倍
+        if (bpf_map_update_elem(array_fd, &key, &value, BPF_ANY) != 0) {
+            fprintf(stderr, "Failed to insert/update element in array_map: %d\n", errno);
+            return 1;
+        }
+    }
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed = diff(start, end);
+    snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
+    // 使用%-15s确保左对齐且占用15个字符
+    printf("%-13s", formatted_time);
 
-    // // Test deletion for HashMap
-    // clock_gettime(CLOCK_MONOTONIC, &start);
-    // for (int i = 0; i < NUM_ENTRIES; i++) {
-    //     key = i;
-    //     if (bpf_map_delete_elem(hash_fd, &key) != 0) {
-    //         fprintf(stderr, "Failed to delete from hash_map: %d\n", errno);
-    //         return 1;
-    //     }
-    // }
-    // clock_gettime(CLOCK_MONOTONIC, &end);
-    // elapsed = diff(start, end);
-    // printf("HashMap delete time: %ld.%09ld seconds\n", elapsed.tv_sec, elapsed.tv_nsec);
+    // 查找元素
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    for (key = 0; key < MAX_ENTRIES; key++) {
+        if (bpf_map_lookup_elem(array_fd, &key, &value) != 0) {
+            fprintf(stderr, "Failed to lookup element in array_map: %d\n", errno);
+            return 1;
+        }
+    }
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed = diff(start, end);
+    snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
+    // 使用%-15s确保左对齐且占用15个字符
+    printf("%-13s", formatted_time);
 
-    // Note: ArrayMap does not support delete operation
-
+    // 清除 ArrayMap
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    for (key = 0; key < MAX_ENTRIES; key++) {
+        value = 0;
+        if (bpf_map_update_elem(array_fd, &key, &value, BPF_ANY) != 0) {
+            fprintf(stderr, "Failed to reset element in array_map: %d\n", errno);
+            return 1;
+        }
+    }
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed = diff(start, end);
+    snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
+    // 使用%-15s确保左对齐且占用15个字符
+    printf("%-13s\n", formatted_time);
     return 0;
 }
+
 int main(int argc, char **argv) {
+    //sleep(10);
     struct ebpf_performance_bpf *skel;
     int err;
     /*解析命令行参数*/
