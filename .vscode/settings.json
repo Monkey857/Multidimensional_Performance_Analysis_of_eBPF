@@ -1,0 +1,14 @@
+{
+    "files.associations": {
+        "bpf_tracing.h": "c",
+        "bpf_core_read.h": "c",
+        "system_error": "c",
+        "array": "c",
+        "functional": "c",
+        "tuple": "c",
+        "type_traits": "c",
+        "utility": "c",
+        "endian.h": "c",
+        "analyze_map.h": "c"
+    }
+}
