@@ -7,7 +7,7 @@
 1.1ebpf运行环境：
 
 ```shell
-#在Summer_of_Open_Source/目录下执行：
+#在Summer_of_Open_Source/目录下执行指令：
 make deps
 ```
 
