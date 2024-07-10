@@ -34,7 +34,8 @@ sudo bash run_ebpf_and_process.sh
 3.结果：
 
 ```shell
-#运行结束后，程序会生成两个png文件：line_plot.png（折线图），bar_plot.png（柱状图）
+#运行结束后，程序会生成两个png文件：
+#average_plot_updated.png (各项操作的平均值)，average_plot_updated.png(更细致的指标分析)
 #通过生成的图片可以直观的观察到Map类型中hash和array在时间层面的增删改查操作之间的差异
 ```
 
