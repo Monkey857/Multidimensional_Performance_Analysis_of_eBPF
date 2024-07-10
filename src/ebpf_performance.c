@@ -124,7 +124,7 @@ static void set_disable_load(struct ebpf_performance_bpf *skel) {
 void print_map_and_check_error(int (*print_func)(struct ebpf_performance_bpf *),
                                struct ebpf_performance_bpf *skel,
                                const char *map_name, int err) {
-    OUTPUT_INTERVAL(3);
+    OUTPUT_INTERVAL(10);
     print_func(skel);
     if (err < 0 && err != -4) {
         printf("Error printing %s map: %d\n", map_name, err);
@@ -145,7 +145,7 @@ struct timespec diff(struct timespec start, struct timespec end) {
     }
     return temp;
 }
-#define MAX_ENTRIES 10*1024*1024
+#define MAX_ENTRIES 1024*1024*10
 int compare_hash_array(struct ebpf_performance_bpf *skel) {
     int hash_fd = bpf_map__fd(skel->maps.hash_map);
     int array_fd = bpf_map__fd(skel->maps.array_map);
@@ -156,29 +156,18 @@ int compare_hash_array(struct ebpf_performance_bpf *skel) {
 
     struct timespec start, end, elapsed;
     int key, value;
-    __u32 lookup_key = 0;
-    __u32 next_key;
-    int times = 0;
+    char formatted_time[20];
+    //生成随机数，使用多个 rand() 调用生成 0 到 MAX_VALUE 之间的随机数
+    srand(time(0));
+    int random_number;
 
-    // 操作 HashMap
-    // 插入元素
+    //开始对MAP操作：
+
+    // 查找HashMap
     clock_gettime(CLOCK_MONOTONIC, &start);
-    for (key = 0; key < MAX_ENTRIES; key++) {
-        value = key * 2; // 假设值为key的两倍
-        if (bpf_map_update_elem(hash_fd, &key, &value, BPF_ANY) != 0) {
-            fprintf(stderr, "Failed to insert element into hash_map: %d\n", errno);
-            return 1;
-        }
-    }
-    clock_gettime(CLOCK_MONOTONIC, &end);
-    elapsed = diff(start, end);
-    printf("%ld.%09ld  ", elapsed.tv_sec, elapsed.tv_nsec);
-    char formatted_time[20]; 
-    
-    // 查找元素
-    clock_gettime(CLOCK_MONOTONIC, &start);
-    for (key = 0; key < MAX_ENTRIES; key++) {
-        if (bpf_map_lookup_elem(hash_fd, &key, &value) != 0) {
+    for (key = 1; key < MAX_ENTRIES; key++) {
+        random_number = (rand() % key);
+        if (bpf_map_lookup_elem(hash_fd, &random_number, &value) != 0) {
             fprintf(stderr, "Failed to lookup element in hash_map: %d\n", errno);
             return 1;
         }
@@ -187,9 +176,22 @@ int compare_hash_array(struct ebpf_performance_bpf *skel) {
     elapsed = diff(start, end);
     snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
     printf("%-13s", formatted_time);
-
+    // 插入HashMap
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    for (key = 1; key < MAX_ENTRIES; key++) {
+        random_number = (rand() % key);
+        value = random_number * 2; // 假设值value为随机数/2
+        if (bpf_map_update_elem(hash_fd, &random_number, &value, BPF_ANY) != 0) {
+            fprintf(stderr, "Failed to insert element into hash_map: %d\n", errno);
+            return 1;
+        }
+    }
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed = diff(start, end);
+    printf("%ld.%09ld  ", elapsed.tv_sec, elapsed.tv_nsec);
+     
+    
     // 清除 HashMap
-    lookup_key = 0;
     clock_gettime(CLOCK_MONOTONIC, &start);
     for(int key = 0;key < MAX_ENTRIES;key++){
         if(bpf_map_delete_elem(hash_fd,&key)!=0){
@@ -201,39 +203,42 @@ int compare_hash_array(struct ebpf_performance_bpf *skel) {
     elapsed = diff(start, end);
     snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
     printf("%-13s", formatted_time);
-    // 操作 ArrayMap
-    // 插入元素
-    clock_gettime(CLOCK_MONOTONIC, &start);
-    for (key = 0; key < MAX_ENTRIES; key++) {
-        value = key * 2; // 假设值为key的两倍
-        if (bpf_map_update_elem(array_fd, &key, &value, BPF_ANY) != 0) {
-            fprintf(stderr, "Failed to insert/update element in array_map: %d\n", errno);
-            return 1;
-        }
-    }
-    clock_gettime(CLOCK_MONOTONIC, &end);
-    elapsed = diff(start, end);
-    snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
-    // 使用%-15s确保左对齐且占用15个字符
-    printf("%-13s", formatted_time);
+    // 操作 ArrayMap：
 
-    // 查找元素
+    // 查找ArrayMap
     clock_gettime(CLOCK_MONOTONIC, &start);
-    for (key = 0; key < MAX_ENTRIES; key++) {
-        if (bpf_map_lookup_elem(array_fd, &key, &value) != 0) {
+    for (key = 1; key < MAX_ENTRIES; key++) {
+        random_number = (rand() % key);
+        if (bpf_map_lookup_elem(array_fd, &random_number, &value) != 0) {
             fprintf(stderr, "Failed to lookup element in array_map: %d\n", errno);
             return 1;
         }
     }
+    
+    // 插入ArrayMap
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    for (key = 1; key < MAX_ENTRIES; key++) {
+        random_number = (rand() % key);
+        value = key * 2; // 假设值为key的两倍
+        if (bpf_map_update_elem(array_fd, &random_number, &value, BPF_ANY) != 0) {
+            fprintf(stderr, "Failed to insert element in array_map: %d\n", errno);
+            return 1;
+        }
+    }
     clock_gettime(CLOCK_MONOTONIC, &end);
     elapsed = diff(start, end);
     snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
-    // 使用%-15s确保左对齐且占用15个字符
     printf("%-13s", formatted_time);
 
-    // 清除 ArrayMap
+
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed = diff(start, end);
+    snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
+    printf("%-13s", formatted_time);
+
+    //清除ArrayMap
     clock_gettime(CLOCK_MONOTONIC, &start);
-    for (key = 0; key < MAX_ENTRIES; key++) {
+    for (key = 1; key < MAX_ENTRIES; key++) {
         value = 0;
         if (bpf_map_update_elem(array_fd, &key, &value, BPF_ANY) != 0) {
             fprintf(stderr, "Failed to reset element in array_map: %d\n", errno);
@@ -243,13 +248,11 @@ int compare_hash_array(struct ebpf_performance_bpf *skel) {
     clock_gettime(CLOCK_MONOTONIC, &end);
     elapsed = diff(start, end);
     snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
-    // 使用%-15s确保左对齐且占用15个字符
     printf("%-13s\n", formatted_time);
     return 0;
 }
 
 int main(int argc, char **argv) {
-    //sleep(10);
     struct ebpf_performance_bpf *skel;
     int err;
     /*解析命令行参数*/

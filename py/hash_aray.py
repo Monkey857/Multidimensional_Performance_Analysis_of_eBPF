@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import csv
 
-# 输入文件名和输出文件名
+# 输入和输出文件名
 input_file = './output.txt'
 output_file = './data.csv'
 
@@ -20,56 +20,64 @@ with open(input_file, 'r') as txt_file, open(output_file, 'w', newline='') as cs
     csv_writer.writerow(columns)  # 写入列名
     csv_writer.writerows(data_lines)  # 写入数据
 
-print(f"Successfully converted {input_file} to {output_file}")
-
-# 使用 Pandas 读取 .csv 文件并计算每列的平均值
+# 使用 Pandas 读取 .csv 文件并计算每列的统计信息
 data = pd.read_csv(output_file)  # 默认使用逗号分隔符读取数据
-average_values = data.mean()
 
-print("\nAverage values:")
-print(average_values)
+# 提取 hash 和 array 的平均值
+average_values_hash = data[['hash_ins', 'hash_look', 'hash_del']].mean()
+average_values_array = data[['arr_ins', 'arr_look', 'arr_clear']].mean()
 
-# 重新组织数据
-hash_values = average_values[['hash_ins', 'hash_look', 'hash_del']]
-arr_values = average_values[['arr_ins', 'arr_look', 'arr_clear']]
-labels = ['insert', 'lookup', 'delete']
-
-# 绘制折线图
+# 绘制平均值图表，确保为每条线条指定标签
 plt.figure(figsize=(10, 6))
 
-# 绘制hash相关的折线
-plt.plot(labels, hash_values, marker='o', linestyle='-', color='b', label='Hash')
+# 绘制 hash 使用蓝色线条
+plt.plot(['insert', 'lookup', 'delete'], average_values_hash, marker='o', linestyle='-', color='b', label='Hash')
 
-# 绘制array相关的折线
-plt.plot(labels, arr_values, marker='o', linestyle='-', color='g', label='Array')
+# 绘制 array 使用红色线条
+plt.plot(['insert', 'lookup', 'delete'], average_values_array, marker='s', linestyle='-', color='r', label='Array')
 
-# 添加标题和标签
-plt.title('Average Values Line Plot')
-plt.xlabel('Operations')
-plt.ylabel('Average Value (seconds)')
-plt.legend()
+plt.title('Average Performance of eBPF Hash and Array Operations', pad=20)
+plt.xlabel('Operation Type')
+plt.ylabel('Value')
+plt.legend(loc='upper right', fontsize='small', frameon=True, shadow=True)
 plt.grid(True)
-
-# 保存并显示图表
-plt.savefig('line_plot.png')  # 保存为图片文件
+plt.savefig('average_plot_updated.png')  # 保存为图片文件
 plt.show()
 
-# 绘制柱状图
-plt.figure(figsize=(10, 6))
-bar_width = 0.35
-index = range(len(labels))
+# 计算所有统计信息
+metrics = {
+    'Average': data.mean(),
+    'Median': data.median(),
+    'Std Dev': data.std(),
+    'Variance': data.var(),
+    'Max': data.max(),
+    'Min': data.min(),
+    'Kurtosis': data.kurtosis(),
+    'Skewness': data.skew()
+}
 
-plt.bar(index, hash_values, bar_width, color='b', label='Hash')
-plt.bar([i + bar_width for i in index], arr_values, bar_width, color='g', label='Array')
+# 打印所有统计信息到控制台
+for metric, values in metrics.items():
+    print(f"{metric} values:")
+    for key, value in values.items():
+        print(f"{key}: {value}")
+    print()
 
-# 添加标题和标签
-plt.title('Average Values Bar Plot')
-plt.xlabel('Operations')
-plt.ylabel('Average Value (seconds)')
-plt.xticks([i + bar_width / 2 for i in index], labels)
-plt.legend()
-plt.grid(axis='y')
+# 绘制包含所有统计信息的综合图表
+plt.figure(figsize=(14, 8))
 
-# 保存并显示图表
-plt.savefig('bar_plot.png')  # 保存为图片文件
+# 颜色映射表，用于确保同一个指标使用相同的颜色
+colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'orange']
+
+for i, (metric, values) in enumerate(metrics.items()):
+    color = colors[i % len(colors)]
+    plt.plot(['insert', 'lookup', 'delete'], values[['hash_ins', 'hash_look', 'hash_del']], marker='o', linestyle='-', color=color, label=f'Hash {metric}')
+    plt.plot(['insert', 'lookup', 'delete'], values[['arr_ins', 'arr_look', 'arr_clear']], marker='s', linestyle='-', color=color, label=f'Array {metric}')
+
+plt.title('Statistics of eBPF Hash and Array Operations', pad=20)
+plt.xlabel('Operation Type')
+plt.ylabel('Value')
+plt.legend(loc='upper right', bbox_to_anchor=(1.15, 1), fontsize='small', frameon=True, shadow=True)
+plt.grid(True)
+plt.savefig('combined_plot_updated.png')  # 保存为图片文件
 plt.show()
