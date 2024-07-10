@@ -36,7 +36,6 @@ sudo bash run_ebpf_and_process.sh
 ```shell
 #运行结束后，程序会生成两个png文件：line_plot.png（折线图），bar_plot.png（柱状图）
 #通过生成的图片可以直观的观察到Map类型中hash和array在时间层面的增删改查操作之间的差异
-sudo bash run_ebpf_and_process.sh
 ```
 
 
