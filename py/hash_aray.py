@@ -46,14 +46,14 @@ plt.show()
 
 # 计算所有统计信息
 metrics = {
-    'Average': data.mean(),
-    'Median': data.median(),
-    'Std Dev': data.std(),
-    'Variance': data.var(),
-    'Max': data.max(),
-    'Min': data.min(),
-    'Kurtosis': data.kurtosis(),
-    'Skewness': data.skew()
+    'Average': data.mean(),       # 平均值
+    'Median': data.median(),      # 中位数
+    'Std Dev': data.std(),        # 标准差
+    'Variance': data.var(),       # 方差
+    'Max': data.max(),            # 最大值
+    'Min': data.min(),            # 最小值
+    'Kurtosis': data.kurtosis(),  # 峰度
+    'Skewness': data.skew()       # 偏度
 }
 
 # 打印所有统计信息到控制台
@@ -66,13 +66,23 @@ for metric, values in metrics.items():
 # 绘制包含所有统计信息的综合图表
 plt.figure(figsize=(14, 8))
 
-# 颜色映射表，用于确保同一个指标使用相同的颜色
-colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'orange']
+# 分别绘制 hash 和 array 的平均值
+plt.plot(['insert', 'lookup', 'delete'], average_values_hash, marker='o', linestyle='-', color='blue', label='Hash Average')
+plt.plot(['insert', 'lookup', 'delete'], average_values_array, marker='s', linestyle='-', color='red', label='Array Average')
 
-for i, (metric, values) in enumerate(metrics.items()):
-    color = colors[i % len(colors)]
-    plt.plot(['insert', 'lookup', 'delete'], values[['hash_ins', 'hash_look', 'hash_del']], marker='o', linestyle='-', color=color, label=f'Hash {metric}')
-    plt.plot(['insert', 'lookup', 'delete'], values[['arr_ins', 'arr_look', 'arr_clear']], marker='s', linestyle='-', color=color, label=f'Array {metric}')
+# 颜色映射表，用于确保同一个指标使用相同的颜色
+colors = ['g', 'c', 'm', 'y', 'k', 'orange']
+
+# 从第一个颜色开始，用于其他统计信息
+color_index = 0
+
+# 绘制其他统计信息
+for metric, values in metrics.items():
+    if metric != 'Average':  # 跳过已经绘制的平均值
+        color = colors[color_index % len(colors)]
+        plt.plot(['insert', 'lookup', 'delete'], values[['hash_ins', 'hash_look', 'hash_del']], marker='o', linestyle='-', color=color, label=f'Hash {metric}')
+        plt.plot(['insert', 'lookup', 'delete'], values[['arr_ins', 'arr_look', 'arr_clear']], marker='s', linestyle='--', color=color, label=f'Array {metric}')
+        color_index += 1
 
 plt.title('Statistics of eBPF Hash and Array Operations', pad=20)
 plt.xlabel('Operation Type')
