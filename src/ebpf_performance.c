@@ -29,11 +29,11 @@
 
 // 定义env结构体，用来存储程序中的事件信息
 static struct env {
-    bool execute_hash_vs_array;
+    bool execute_test_maps;
     bool verbose;
     enum EventType event_type;
 } env = {
-    .execute_hash_vs_array = false,
+    .execute_test_maps = false,
     .verbose = false,
     .event_type = NONE_TYPE,
 };
@@ -44,7 +44,7 @@ const char argp_program_doc[] = "BPF program used for eBPF performance testing\n
 int option_selected = 0;  // 功能标志变量,确保激活子功能
 // 具体解释命令行参数
 static const struct argp_option opts[] = {
-    {"Map:hash_vs_array", 'a', NULL, 0, "Comparing the differences between array and hash"},
+    {"Map test", 'a', NULL, 0, "Comparing the differences between eBPF Maps"},
     {"verbose", 'v', NULL, 0, "Verbose debug output"},
     {NULL, 'H', NULL, OPTION_HIDDEN, "Show the full help"},
     {},
@@ -53,7 +53,7 @@ static const struct argp_option opts[] = {
 static error_t parse_arg(int key, char *arg, struct argp_state *state) {
     switch (key) {
         case 'a':
-            SET_OPTION_AND_CHECK_USAGE(option_selected, env.execute_hash_vs_array);
+            SET_OPTION_AND_CHECK_USAGE(option_selected, env.execute_test_maps);
             break;
         case 'H':
             argp_state_help(state, stderr, ARGP_HELP_STD_HELP);
@@ -91,8 +91,8 @@ static int determineEventType(struct env *env) {
     if (!env) {
         return 1;
     }
-    if (env->execute_hash_vs_array) {
-        env->event_type = HASH_VS_ARRAY;
+    if (env->execute_test_maps) {
+        env->event_type = EXECUTE_TEST_MAPS;
     } else {
         env->event_type = NONE_TYPE;  // 或者根据需要设置一个默认的事件类型
     }
@@ -106,9 +106,10 @@ static int print_event_head(struct env *env) {
         return 1;
     }
     switch (env->event_type) {
-        case HASH_VS_ARRAY:
-            printf("%-12s %-12s %-12s %-12s %-12s %-12s \n", "hash_ins",
-                   "hash_look", "hash_del", "arr_ins", "arr_look", "arr_clear");
+        case EXECUTE_TEST_MAPS:
+            printf("%-12s %-12s %-12s %-12s %-12s %-12s\n", "Map_01_Insert",
+                   "Map_01_LookUp", "Map_01_Delete","Map_02_Insert",
+                   "Map_02_LookUp", "Map_02_Delete");
             break;
         default:
             // Handle default case or display an error message
@@ -119,7 +120,7 @@ static int print_event_head(struct env *env) {
 
 static void set_disable_load(struct ebpf_performance_bpf *skel) {
     bpf_program__set_autoload(skel->progs.tp_sys_entry,
-                              env.execute_hash_vs_array ? true : false);
+                              env.execute_test_maps ? true : false);
 }
 void print_map_and_check_error(int (*print_func)(struct ebpf_performance_bpf *),
                                struct ebpf_performance_bpf *skel,
@@ -145,11 +146,14 @@ struct timespec diff(struct timespec start, struct timespec end) {
     }
     return temp;
 }
-#define MAX_ENTRIES 1024*1024*10
-int compare_hash_array(struct ebpf_performance_bpf *skel) {
+#define MAX_ENTRIES 1024
+#define MAX_CPUS 8
+
+int compare_ebpf_maps(struct ebpf_performance_bpf *skel) {
     int hash_fd = bpf_map__fd(skel->maps.hash_map);
     int array_fd = bpf_map__fd(skel->maps.array_map);
-    if (hash_fd < 0 || array_fd < 0) {
+    int per_cpu_array_fd = bpf_map__fd(skel->maps.percpu_array_map);
+    if (hash_fd < 0 || array_fd < 0 || per_cpu_array_fd < 0) {
         fprintf(stderr, "Failed to get map file descriptors: %d, %d\n", hash_fd, array_fd);
         return 1;
     }
@@ -157,13 +161,10 @@ int compare_hash_array(struct ebpf_performance_bpf *skel) {
     struct timespec start, end, elapsed;
     int key, value;
     char formatted_time[20];
-    //生成随机数，使用多个 rand() 调用生成 0 到 MAX_VALUE 之间的随机数
-    srand(time(0));
+    srand(time(0)); //生成随机数种子
     int random_number;
 
-    //开始对MAP操作：
-
-    // 查找HashMap
+    // 查找 HashMap
     clock_gettime(CLOCK_MONOTONIC, &start);
     for (key = 1; key < MAX_ENTRIES; key++) {
         random_number = (rand() % key);
@@ -176,11 +177,13 @@ int compare_hash_array(struct ebpf_performance_bpf *skel) {
     elapsed = diff(start, end);
     snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
     printf("%-13s", formatted_time);
-    // 插入HashMap
+    fflush(stdout);  // 刷新输出缓冲区
+
+    // 插入 HashMap
     clock_gettime(CLOCK_MONOTONIC, &start);
     for (key = 1; key < MAX_ENTRIES; key++) {
         random_number = (rand() % key);
-        value = random_number * 2; // 假设值value为随机数/2
+        value = random_number * 2;
         if (bpf_map_update_elem(hash_fd, &random_number, &value, BPF_ANY) != 0) {
             fprintf(stderr, "Failed to insert element into hash_map: %d\n", errno);
             return 1;
@@ -188,13 +191,14 @@ int compare_hash_array(struct ebpf_performance_bpf *skel) {
     }
     clock_gettime(CLOCK_MONOTONIC, &end);
     elapsed = diff(start, end);
-    printf("%ld.%09ld  ", elapsed.tv_sec, elapsed.tv_nsec);
-     
-    
+    snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
+    printf("%-13s", formatted_time);
+    fflush(stdout);  // 刷新输出缓冲区
+
     // 清除 HashMap
     clock_gettime(CLOCK_MONOTONIC, &start);
-    for(int key = 0;key < MAX_ENTRIES;key++){
-        if(bpf_map_delete_elem(hash_fd,&key)!=0){
+    for (key = 0; key < MAX_ENTRIES; key++) {
+        if (bpf_map_delete_elem(hash_fd, &key) != 0) {
             fprintf(stderr, "Failed to delete element in hash_map: %d\n", errno);
             return 1;
         }
@@ -203,9 +207,11 @@ int compare_hash_array(struct ebpf_performance_bpf *skel) {
     elapsed = diff(start, end);
     snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
     printf("%-13s", formatted_time);
-    // 操作 ArrayMap：
+    fflush(stdout);  // 刷新输出缓冲区
 
-    // 查找ArrayMap
+    // 操作 ArrayMap
+
+    // 查找 ArrayMap
     clock_gettime(CLOCK_MONOTONIC, &start);
     for (key = 1; key < MAX_ENTRIES; key++) {
         random_number = (rand() % key);
@@ -214,12 +220,17 @@ int compare_hash_array(struct ebpf_performance_bpf *skel) {
             return 1;
         }
     }
-    
-    // 插入ArrayMap
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed = diff(start, end);
+    snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
+    printf("%-13s", formatted_time);
+    fflush(stdout);  // 刷新输出缓冲区
+
+    // 插入 ArrayMap
     clock_gettime(CLOCK_MONOTONIC, &start);
     for (key = 1; key < MAX_ENTRIES; key++) {
         random_number = (rand() % key);
-        value = key * 2; // 假设值为key的两倍
+        value = key * 2;
         if (bpf_map_update_elem(array_fd, &random_number, &value, BPF_ANY) != 0) {
             fprintf(stderr, "Failed to insert element in array_map: %d\n", errno);
             return 1;
@@ -229,14 +240,9 @@ int compare_hash_array(struct ebpf_performance_bpf *skel) {
     elapsed = diff(start, end);
     snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
     printf("%-13s", formatted_time);
+    fflush(stdout);  // 刷新输出缓冲区
 
-
-    clock_gettime(CLOCK_MONOTONIC, &end);
-    elapsed = diff(start, end);
-    snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
-    printf("%-13s", formatted_time);
-
-    //清除ArrayMap
+    // 清除 ArrayMap
     clock_gettime(CLOCK_MONOTONIC, &start);
     for (key = 1; key < MAX_ENTRIES; key++) {
         value = 0;
@@ -248,10 +254,85 @@ int compare_hash_array(struct ebpf_performance_bpf *skel) {
     clock_gettime(CLOCK_MONOTONIC, &end);
     elapsed = diff(start, end);
     snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
-    printf("%-13s\n", formatted_time);
+    printf("%-13s", formatted_time);
+    fflush(stdout);  // 刷新输出缓冲区
+
+    //操作 Per_cpu ArrayMap
+    int num_cpus = sysconf(_SC_NPROCESSORS_ONLN);
+    size_t value_size = sizeof(__u64) * num_cpus;
+
+    //查找 Per_cpu ArrayMap
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    for (key = 1; key < MAX_ENTRIES; key++) {
+        random_number = (rand() % key);
+        __u64 *values = malloc(value_size);
+        if (bpf_map_lookup_elem(per_cpu_array_fd, &random_number, values) != 0) {
+            fprintf(stderr, "Failed to lookup element in percpu_array_map: %d\n", errno);
+            return 1;
+        }
+
+        // 根据需要处理 CPU 上的值
+        for (int cpu = 0; cpu < MAX_CPUS; cpu++) {
+            if (values[cpu]) {}  // 可根据实际需求打印或使用
+        }
+        free(values);
+    }
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed = diff(start, end);
+    snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
+    printf("%-13s", formatted_time);
+    fflush(stdout);  // 刷新输出缓冲区
+
+    //插入per_cpu_array_map
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    for (key = 1; key < MAX_ENTRIES; key++) {
+        random_number = (rand() % key);
+        // 初始化每个CPU的值
+        __u64 *values = malloc(value_size);
+        for (int cpu = 0; cpu < MAX_CPUS; cpu++) {
+            values[cpu] = random_number * (cpu + 1); // 示例：每个CPU的值为随机数乘以CPU编号
+        }
+
+        if (bpf_map_update_elem(per_cpu_array_fd, &random_number, values, BPF_ANY) != 0) {
+            fprintf(stderr, "Failed to insert element into percpu_array_map: %d\n", errno);
+            return 1;
+        }
+        free(values);
+    }
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed = diff(start, end);
+    snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
+    printf("%-13s", formatted_time);
+    fflush(stdout);
+
+    //清除 Per_cpu ArrayMap
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    for (key = 1; key < MAX_ENTRIES; key++) {
+        // 将每个CPU上的值重置为0
+        unsigned long values[MAX_CPUS] = {0}; // 所有CPU初始化为0
+
+        if (bpf_map_update_elem(per_cpu_array_fd, &key, values, BPF_ANY) != 0) {
+            fprintf(stderr, "Failed to reset element in percpu_array_map: %d\n", errno);
+            return 1;
+        }
+    }
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed = diff(start, end);
+    snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
+    printf("%-13s", formatted_time);
+    //计算一下malloc和free的耗时
+    // clock_gettime(CLOCK_MONOTONIC, &start);
+    // for(int i = 0 ; i < 1024 ; i++){
+    //     __u64 *values = malloc(value_size);
+    //     free(values);
+    // }
+    // clock_gettime(CLOCK_MONOTONIC, &end);
+    // elapsed = diff(start, end);
+    // snprintf(formatted_time, sizeof(formatted_time), "%ld.%09ld", elapsed.tv_sec, elapsed.tv_nsec);
+    // printf("malloc耗时:%-13s\n", formatted_time);
+    printf("\n");
     return 0;
 }
-
 int main(int argc, char **argv) {
     struct ebpf_performance_bpf *skel;
     int err;
@@ -295,14 +376,14 @@ int main(int argc, char **argv) {
         goto cleanup;
     }
     /*打印信息头*/
-    err = print_event_head(&env);
+    //err = print_event_head(&env);
     if (err) {
         fprintf(stderr, "Please specify an option using %s.\n", OPTIONS_LIST);
         goto cleanup;
     }
     while (!exiting) {
-        if (env.execute_hash_vs_array) {
-            print_map_and_check_error(compare_hash_array, skel, "hash_array", err);
+        if (env.execute_test_maps) {
+            print_map_and_check_error(compare_ebpf_maps, skel, "maps", err);
         }
         /* Ctrl-C will cause -EINTR */
         if (err == -EINTR) {

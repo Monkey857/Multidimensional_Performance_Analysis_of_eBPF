@@ -38,7 +38,7 @@
 
 enum EventType {
     NONE_TYPE,
-    HASH_VS_ARRAY,
+    EXECUTE_TEST_MAPS,
 } event_type;
 
 #endif 

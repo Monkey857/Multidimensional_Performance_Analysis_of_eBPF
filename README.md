@@ -10,7 +10,9 @@
 ​	我的研究旨在通过系统化的性能评估和对比分析，全面评估和优化eBPF（扩展伯克利数据包过滤器）的性能。具体而言，我们希望深入探索eBPF在各种使用场景下的性能表现，包括比较不同类型的映射（map）、分析不同挂载点的性能差异，以及评估不同内核版本的影响。通过编写和执行一系列测试程序，我们的目标是深入了解eBPF的操作效率，并识别潜在的性能瓶颈。最终，我们将根据研究结果提出针对特定应用场景的最佳实践指南，推动eBPF技术在各行业的应用和发展。
 
 ## 三、测试方案：
-[测试方案.md](./docs/ebpf性能测试方案.md)
+[理论分析.md](./docs/Map理论分析.md)
+
+[测试方案.md](./docs/eBPF性能测试方案.md)
 
 ## 四、工具使用说明：
 
@@ -19,7 +21,7 @@
 1.1ebpf运行环境：
 
 ```shell
-#在Summer_of_Open_Source/目录下执行指令：
+#在eBPF_Performance_Analysis/目录下执行指令：
 make deps
 ```
 
@@ -39,16 +41,14 @@ pip3 install matplotlib
 2.运行：
 
 ```shell
-#在Summer_of_Open_Source/目录下运行shell脚本：（通过ctrl+c来停止测试，程序会自动退出并分析出结果）
-#此脚本用来比较Map类型中hash和array在时间层面进行增删改查操作的差异
+#在eBPF_Performance_Analysis/目录下运行shell脚本：
+#此脚本用来比较不同Map类型在时间层面进行增删改查操作的差异
 sudo bash run_ebpf_and_process.sh
 ```
 3.结果：
 
 ```shell
-#运行结束后，程序会生成两个png文件：
-#average_plot_updated.png (各项操作的平均值)，average_plot_updated.png(更细致的指标分析)
-#通过生成的图片可以直观的观察到Map类型中hash和array在时间层面的增删改查操作之间的差异
+#运行结束后，程序会生成python工具分析后的图像文件
 ```
 
 

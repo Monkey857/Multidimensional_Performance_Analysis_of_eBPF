@@ -22,5 +22,5 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 //对比Map类型中的hash和array的性能
 SEC("tracepoint/raw_syscalls/sys_enter")
 int tp_sys_entry(struct trace_event_raw_sys_enter *args){
-    return hash_vs_array(args);
+    return analyze_maps(args);
 }

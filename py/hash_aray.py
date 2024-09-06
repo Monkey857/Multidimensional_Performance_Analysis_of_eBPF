@@ -24,8 +24,8 @@ with open(input_file, 'r') as txt_file, open(output_file, 'w', newline='') as cs
 data = pd.read_csv(output_file)  # 默认使用逗号分隔符读取数据
 
 # 提取 hash 和 array 的平均值
-average_values_hash = data[['hash_ins', 'hash_look', 'hash_del']].mean()
-average_values_array = data[['arr_ins', 'arr_look', 'arr_clear']].mean()
+average_values_hash = data[['Map_01_Insert', 'Map_01_LookUp', 'Map_01_Delete']].mean()
+average_values_array = data[['Map_02_Insert', 'Map_02_LookUp', 'Map_02_Delete']].mean()
 
 # 绘制平均值图表，确保为每条线条指定标签
 plt.figure(figsize=(10, 6))
@@ -80,8 +80,8 @@ color_index = 0
 for metric, values in metrics.items():
     if metric != 'Average':  # 跳过已经绘制的平均值
         color = colors[color_index % len(colors)]
-        plt.plot(['insert', 'lookup', 'delete'], values[['hash_ins', 'hash_look', 'hash_del']], marker='o', linestyle='-', color=color, label=f'Hash {metric}')
-        plt.plot(['insert', 'lookup', 'delete'], values[['arr_ins', 'arr_look', 'arr_clear']], marker='s', linestyle='--', color=color, label=f'Array {metric}')
+        plt.plot(['insert', 'lookup', 'delete'], values[['Map_01_Insert', 'Map_01_LookUp', 'Map_01_Delete']], marker='o', linestyle='-', color=color, label=f'Hash {metric}')
+        plt.plot(['insert', 'lookup', 'delete'], values[['Map_02_Insert', 'Map_02_LookUp', 'Map_02_Delete']], marker='s', linestyle='--', color=color, label=f'Array {metric}')
         color_index += 1
 
 plt.title('Statistics of eBPF Hash and Array Operations', pad=20)
