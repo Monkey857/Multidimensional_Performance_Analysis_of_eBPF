@@ -18,14 +18,14 @@
 
 ### 1.环境准备：
 
-1.1ebpf运行环境：
+1.1 eBPF运行环境：
 
 ```shell
 #在eBPF_Performance_Analysis/目录下执行指令：
 make deps
 ```
 
-1.2python环境：
+1.2 python运行环境：
 
 ```shell
 #下载python3
@@ -38,7 +38,7 @@ sudo pip3 install pandas -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip3 install matplotlib
 ```
 
-2.运行：
+2.运行shell脚本：
 
 ```shell
 #在eBPF_Performance_Analysis/目录下运行shell脚本：
