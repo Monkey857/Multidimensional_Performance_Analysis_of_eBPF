@@ -19,6 +19,7 @@
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_tracing.h>
 #include "common.h"
+
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 1024);//12KB
@@ -46,7 +47,8 @@ struct {
 //在内核态中将数据信息存入到相应的map中
 volatile __u64 k = 0;
 #define MAX_ENTRIES 1024
-static int analyze_maps(struct trace_event_raw_sys_enter *args){
+static int analyze_maps(struct trace_event_raw_sys_enter *args,void *rb,
+                                 struct common_event *e){
     u32 idx;
     u64 syscall_id = (u64)args->id;
     // 使用原子操作递增k，并获取递增前的值
@@ -61,6 +63,12 @@ static int analyze_maps(struct trace_event_raw_sys_enter *args){
     bpf_map_update_elem(&array_map, &idx, &syscall_id, BPF_ANY);
     bpf_map_update_elem(&percpu_array_map,&idx,&syscall_id,BPF_ANY);
     bpf_map_update_elem(&percpu_hash_map,&idx,&syscall_id,BPF_ANY);
+    bpf_map_update_elem(&percpu_hash_map,&idx,&syscall_id,BPF_ANY);
+
+    RESERVE_RINGBUF_ENTRY(rb, e);
+    e->test_ringbuff.key = idx;
+    e->test_ringbuff.value = syscall_id;
+    bpf_ringbuf_submit(e, 0);
     return 0;
 }
 #endif /* __ANALYZE_MAP_H */

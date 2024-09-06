@@ -35,10 +35,24 @@
             PRINT_USAGE_ERR();                    \
         }                                         \
     } while (0)
-
+#define RESERVE_RINGBUF_ENTRY(rb, e)                             \
+    do {                                                         \
+        typeof(e) _tmp = bpf_ringbuf_reserve(rb, sizeof(*e), 0); \
+        if (!_tmp)                                               \
+            return 0;                                            \
+        e = _tmp;                                                \
+    } while (0)
 enum EventType {
     NONE_TYPE,
     EXECUTE_TEST_MAPS,
 } event_type;
 
+struct common_event{
+    union {
+        struct {
+            int key;
+            int value;
+        } test_ringbuff;
+    };
+};
 #endif 
