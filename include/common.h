@@ -14,9 +14,11 @@
 #ifndef __EBPF_PERFORMANCE_H
 #define __EBPF_PERFORMANCE_H
 
+typedef unsigned int __u32;
+typedef long long unsigned int __u64;
 
 #define OPTIONS_LIST "-a"
-
+#define RING_BUFFER_TIMEOUT_MS 100
 #define OUTPUT_INTERVAL(SECONDS) sleep(SECONDS)
 
 #define PRINT_USAGE_ERR()                                               \
@@ -50,8 +52,8 @@ enum EventType {
 struct common_event{
     union {
         struct {
-            int key;
-            int value;
+            __u32 key;
+            __u64 value;
         } test_ringbuff;
     };
 };

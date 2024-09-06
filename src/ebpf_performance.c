@@ -85,7 +85,10 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char *format,
 static volatile bool exiting = false;
 // 设置信号来控制是否打印信息
 static void sig_handler(int sig) { exiting = true; }
-
+//控制ringbuff次数
+static int event_count = 0;        // 事件计数器
+static volatile bool stop_polling = false; // 控制轮询的标志
+#define MAX_EVENTS 1024
 // 根据 env 设置 EventType
 static int determineEventType(struct env *env) {
 	if (!env) {
@@ -148,7 +151,10 @@ struct timespec diff(struct timespec start, struct timespec end) {
 }
 #define MAX_ENTRIES 1024
 #define MAX_CPUS 8
-
+// 信号处理函数，用来终止polling
+void stop_polling_handler(int signum) {
+    stop_polling = true;
+}
 int compare_ebpf_maps(struct ebpf_performance_bpf *skel) {
 	int hash_fd = bpf_map__fd(skel->maps.hash_map);
 	int array_fd = bpf_map__fd(skel->maps.array_map);
@@ -415,7 +421,7 @@ int compare_ebpf_maps(struct ebpf_performance_bpf *skel) {
 	printf("%-13s", formatted_time);
 	fflush(stdout); // 刷新输出缓冲区
 
-	// 清除 Per_cpu HashMap
+		// 清除 Per_cpu HashMap
 	clock_gettime(CLOCK_MONOTONIC, &start);
 	for (key = 1; key < MAX_ENTRIES; key++) {
 		if (bpf_map_delete_elem(per_cpu_hash_fd, &key) != 0) {
@@ -430,10 +436,11 @@ int compare_ebpf_maps(struct ebpf_performance_bpf *skel) {
 	         elapsed.tv_sec, elapsed.tv_nsec);
 	printf("%-13s", formatted_time);
 	fflush(stdout); // 刷新输出缓冲区
-
+    
 	// 操作ringbuff
 
 	printf("\n");
+	
 	return 0;
 }
 /*环形缓冲区的处理函数，用来打印ringbuff中的数据（最后展示的数据行）*/
@@ -444,15 +451,21 @@ static int handle_event(void *ctx, void *data, size_t data_sz) {
     switch(env.event_type){
         case EXECUTE_TEST_MAPS:{
             printf("打印ringbuff的数据\n");
-            printf("%-6d %-6d\n",
-                   e->test_ringbuff.key,
-                   e->test_ringbuff.value);
+            //printf("%-6d %-6llu\n", e->test_ringbuff.key, e->test_ringbuff.value);
+            int key = e->test_ringbuff.key;
+            unsigned long long value = e->test_ringbuff.value;
+            event_count++;
+              // 如果事件计数器达到 MAX_EVENTS，设置标志停止轮询
+            if (event_count >= MAX_EVENTS) {
+                stop_polling = true;
+            }
             break;
         }
         default:
             // 处理未知事件类型
             break;
     }
+    return 0;
 }
 int main(int argc, char **argv) {
 	struct ebpf_performance_bpf *skel;
@@ -510,7 +523,9 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "Failed to create ring buffer\n");
 		goto cleanup;
 	}
+    //err = ring_buffer__poll(rb, RING_BUFFER_TIMEOUT_MS /* timeout, ms */);
 	while (!exiting) {
+        //err = ring_buffer__poll(rb, RING_BUFFER_TIMEOUT_MS /* timeout, ms */);
 		if (env.execute_test_maps) {
 			print_map_and_check_error(compare_ebpf_maps, skel, "maps", err);
 		}

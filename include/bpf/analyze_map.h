@@ -49,10 +49,10 @@ volatile __u64 k = 0;
 #define MAX_ENTRIES 1024
 static int analyze_maps(struct trace_event_raw_sys_enter *args,void *rb,
                                  struct common_event *e){
-    u32 idx;
+    u32 idx,counts;
     u64 syscall_id = (u64)args->id;
     // 使用原子操作递增k，并获取递增前的值
-    idx = __sync_fetch_and_add(&k, 1);    
+    idx = __sync_fetch_and_add(&k, 1); 
     // 确保k在0到MAX_ENTRIES之间循环(避免同步问题)
     if (idx >= MAX_ENTRIES) {
         __sync_bool_compare_and_swap(&k, idx + 1, 0);
@@ -64,11 +64,11 @@ static int analyze_maps(struct trace_event_raw_sys_enter *args,void *rb,
     bpf_map_update_elem(&percpu_array_map,&idx,&syscall_id,BPF_ANY);
     bpf_map_update_elem(&percpu_hash_map,&idx,&syscall_id,BPF_ANY);
     bpf_map_update_elem(&percpu_hash_map,&idx,&syscall_id,BPF_ANY);
-
     RESERVE_RINGBUF_ENTRY(rb, e);
     e->test_ringbuff.key = idx;
     e->test_ringbuff.value = syscall_id;
     bpf_ringbuf_submit(e, 0);
+    bpf_printk("syscall_id = %llu\n", syscall_id);
     return 0;
 }
 #endif /* __ANALYZE_MAP_H */

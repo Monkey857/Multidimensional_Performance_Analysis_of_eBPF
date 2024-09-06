@@ -21,7 +21,7 @@ function ctrl_c() {
 
         # Step 4: Run Python script to process the data
         echo "Running Python script to process the data..."
-        sudo python3 ./py/hash_aray.py
+        sudo python3 ./py/analy.py
 
         if [ $? -eq 0 ]; then
             echo "Python script executed successfully."
