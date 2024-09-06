@@ -391,7 +391,7 @@ GRUB_CMDLINE_LINUX="resume=/dev/mapper/ao_anolis-swap rd.lvm.lv=ao_anolis/root r
 
 **测试的流程如下图所示：**
 
-![image-20240726190714998](C:\Users\yys20\AppData\Roaming\Typora\typora-user-images\image-20240726190714998.png)
+![image-20240726190714998](./images/image-20240726190714998.png)
 
 对上图进行详细解释：
 
@@ -417,7 +417,7 @@ GRUB_CMDLINE_LINUX="resume=/dev/mapper/ao_anolis-swap rd.lvm.lv=ao_anolis/root r
 
 通过上述的描述，接下来给出一个流程图来说明本次测试的具体过程：
 
-<img src="C:\Users\yys20\AppData\Roaming\Typora\typora-user-images\image-20240726193503653.png" alt="image-20240726193503653" style="zoom: 80%;" />
+<img src="./images/image-20240726193503653.png" alt="image-20240726193503653" style="zoom: 80%;" />
 
 ##### **4.1.1测试用例设计：**
 
